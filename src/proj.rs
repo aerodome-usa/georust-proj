@@ -390,6 +390,34 @@ impl ProjBuilder {
         Ok(())
     }
 
+    /// Add a [resource file search path](https://proj.org/resource_files.html), maintaining existing entries.
+    ///
+    /// # Safety
+    /// This method contains unsafe code.
+    pub fn set_multiple_search_paths<'a, P: AsRef<Path> + 'a>(
+        &mut self,
+        newpaths: impl IntoIterator<Item = &'a P>,
+    ) -> Result<(), ProjError> {
+        let existing = self.lib_info()?.searchpath;
+        let pathsep = if cfg!(windows) { ";" } else { ":" };
+        let mut individual: Vec<&str> = existing.split(pathsep).collect();
+        for newpath in newpaths.into_iter() {
+            let np = Path::new(newpath.as_ref());
+            individual.push(np.to_str().ok_or(ProjError::Path)?);
+        }
+        let newlength = individual.len() as i32;
+        // convert path entries to CString
+        let paths_c = individual
+            .iter()
+            .map(|str| CString::new(*str))
+            .collect::<Result<Vec<_>, std::ffi::NulError>>()?;
+        // …then to raw pointers
+        let paths_p: Vec<_> = paths_c.iter().map(|cstr| cstr.as_ptr()).collect();
+        // …then pass the slice of raw pointers as a raw pointer (const char* const*)
+        unsafe { proj_context_set_search_paths(self.ctx(), newlength, paths_p.as_ptr()) }
+        Ok(())
+    }
+
     /// Enable or disable the local cache of grid chunks
     ///
     /// To avoid repeated network access, a local cache of downloaded chunks of grids is
@@ -890,6 +918,44 @@ impl Proj {
             Ok(C::from_xy(
                 F::from(new_x).ok_or(ProjError::FloatConversion)?,
                 F::from(new_y).ok_or(ProjError::FloatConversion)?,
+            ))
+        } else {
+            Err(ProjError::Conversion(error_message(err)?))
+        }
+    }
+
+    pub fn convert_3d<C, F>(&self, point: C) -> Result<C, ProjError>
+    where
+        C: Coord3D<F>,
+        F: CoordinateType,
+    {
+        let c_x: c_double = point.x().to_f64().ok_or(ProjError::FloatConversion)?;
+        let c_y: c_double = point.y().to_f64().ok_or(ProjError::FloatConversion)?;
+        let c_z: c_double = point.z().to_f64().ok_or(ProjError::FloatConversion)?;
+        let new_x;
+        let new_y;
+        let new_z;
+        let err;
+
+        let xyzt = PJ_XYZT {
+            x: c_x,
+            y: c_y,
+            z: c_z,
+            t: f64::INFINITY,
+        };
+        unsafe {
+            proj_errno_reset(self.c_proj);
+            let trans = proj_trans(self.c_proj, PJ_DIRECTION_PJ_FWD, PJ_COORD { xyzt });
+            new_x = trans.xyz.x;
+            new_y = trans.xyz.y;
+            new_z = trans.xyz.z;
+            err = proj_errno(self.c_proj);
+        }
+        if err == 0 {
+            Ok(C::from_xyz(
+                F::from(new_x).ok_or(ProjError::FloatConversion)?,
+                F::from(new_y).ok_or(ProjError::FloatConversion)?,
+                F::from(new_z).ok_or(ProjError::FloatConversion)?,
             ))
         } else {
             Err(ProjError::Conversion(error_message(err)?))
