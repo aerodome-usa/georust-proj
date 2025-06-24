@@ -247,7 +247,9 @@ pub use transform::{Transform, TransformError};
 
 pub use crate::proj::Area;
 pub use crate::proj::Coord;
+pub use crate::proj::Coord3D;
 pub use crate::proj::Info;
+pub use crate::proj::Point;
 pub use crate::proj::Proj;
 pub use crate::proj::ProjBuilder;
 pub use crate::proj::ProjCreateError;
