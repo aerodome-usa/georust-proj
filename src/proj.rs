@@ -83,6 +83,54 @@ impl<T: CoordinateType> Coord<T> for (T, T) {
     }
 }
 
+pub trait Coord3D<T>
+where
+    T: CoordinateType,
+{
+    fn x(&self) -> T;
+    fn y(&self) -> T;
+    fn z(&self) -> T;
+    fn from_xyz(x: T, y: T, z: T) -> Self;
+}
+
+impl<T: CoordinateType> Coord3D<T> for (T, T, T) {
+    fn x(&self) -> T {
+        self.0
+    }
+    fn y(&self) -> T {
+        self.1
+    }
+    fn z(&self) -> T {
+        self.2
+    }
+    fn from_xyz(x: T, y: T, z: T) -> Self {
+        (x, y, z)
+    }
+}
+
+/// 3D point.
+#[derive(Debug, Copy, Clone)]
+pub struct Point<T> {
+    pub x: T,
+    pub y: T,
+    pub z: T,
+}
+
+impl<T: CoordinateType> Coord3D<T> for Point<T> {
+    fn x(&self) -> T {
+        self.x
+    }
+    fn y(&self) -> T {
+        self.y
+    }
+    fn z(&self) -> T {
+        self.z
+    }
+    fn from_xyz(x: T, y: T, z: T) -> Self {
+        Self { x, y, z }
+    }
+}
+
 /// Errors originating in PROJ which can occur during projection and conversion
 #[derive(Error, Debug)]
 #[non_exhaustive]
